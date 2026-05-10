@@ -23,6 +23,22 @@ def init(reg_pipe_, clf_pipe_, features_, df_):
     _X_sc    = None   # reset so a new dataset triggers a fresh build
 
 
+def _run_pipeline(pipeline, X, method="predict"):
+    """
+    Manually step through an sklearn Pipeline, skipping any SimpleImputer steps.
+    Needed because pkl files saved on sklearn 1.6.1 contain imputers that are
+    missing internal attributes added in sklearn 1.8.0.
+    """
+    Xt = X.values if hasattr(X, "values") else X
+    steps = pipeline.steps
+    for _, step in steps[:-1]:
+        if "imputer" in type(step).__name__.lower():
+            continue  # data is already clean — skip the broken legacy imputer
+        Xt = step.transform(Xt)
+    final = steps[-1][1]
+    return getattr(final, method)(Xt)
+
+
 def _ensure_similarity_matrix():
     """Build the scaled feature matrix the first time it is needed."""
     global _X_sc
@@ -123,11 +139,10 @@ def predict_acquisition_impact(player_name, receiving_team=None, season=None):
 
     # Multiple rows (same player traded to same team more than once) → use most recent
     row   = sub.iloc[[0]]
-    # Pre-fill all NaN with 0 so the pipeline's internal imputer receives clean data
     X_row = row.reindex(columns=FEATURES, fill_value=0).fillna(0)
 
-    pred = float(reg_pipe.predict(X_row)[0])
-    prob = float(clf_pipe.predict_proba(X_row)[0, 1])
+    pred = float(_run_pipeline(reg_pipe, X_row, "predict")[0])
+    prob = float(_run_pipeline(clf_pipe, X_row, "predict_proba")[0, 1])
 
     base_pred = row['recv_hist_baseline_win_pct_pred'].values[0]
     trans_wp  = row['receiving_team_trans_win_pct'].values[0]
