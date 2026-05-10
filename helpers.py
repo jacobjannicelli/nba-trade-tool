@@ -10,21 +10,27 @@ df = None
 FEATURES = None   # full 250-feature list from the pkl — never filtered
 reg_pipe = None
 clf_pipe = None
-_imp = None
-_sc = None
-_X_sc = None
+_X_sc = None      # built lazily on first call to find_similar_acquisitions()
 
 
-def init(reg_pipe_, clf_pipe_, features_, df_, x_sc_, imp_, sc_):
+def init(reg_pipe_, clf_pipe_, features_, df_):
     """Initialize module globals. Must be called once at app startup."""
-    global df, FEATURES, reg_pipe, clf_pipe, _X_sc, _imp, _sc
+    global df, FEATURES, reg_pipe, clf_pipe, _X_sc
     df       = df_
     FEATURES = list(features_)
     reg_pipe = reg_pipe_
     clf_pipe = clf_pipe_
-    _X_sc    = x_sc_
-    _imp     = imp_
-    _sc      = sc_
+    _X_sc    = None   # reset so a new dataset triggers a fresh build
+
+
+def _ensure_similarity_matrix():
+    """Build the scaled feature matrix the first time it is needed."""
+    global _X_sc
+    if _X_sc is not None:
+        return
+    df_features = df.reindex(columns=FEATURES, fill_value=0).fillna(0)
+    sc = StandardScaler()
+    _X_sc = sc.fit_transform(df_features)
 
 
 def _normalize_name(name: str) -> str:
@@ -185,6 +191,8 @@ def find_similar_acquisitions(player_name, receiving_team=None, season=None, n=5
         list of dicts, each describing a similar historical acquisition.
         Returns {'error': '...'} if the player is not found.
     """
+    _ensure_similarity_matrix()
+
     player_mask = _player_mask(player_name)
     mask = player_mask.copy()
     if receiving_team:

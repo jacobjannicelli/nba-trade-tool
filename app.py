@@ -6,7 +6,6 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.preprocessing import StandardScaler
 
 import helpers
 
@@ -23,24 +22,21 @@ api_key = st.secrets.get("ANTHROPIC_API_KEY", os.environ.get("ANTHROPIC_API_KEY"
 # ── Load models & data once at startup ───────────────────────────────────────
 @st.cache_resource(show_spinner="Loading models and data…")
 def load_everything():
+    st.write("Loading regressor…")
     reg_pipe = joblib.load("final_trade_impact_regressor.pkl")
+    st.write("Loading classifier…")
     clf_pipe = joblib.load("final_trade_impact_classifier.pkl")
+    st.write("Loading features…")
     FEATURES = joblib.load("final_model_features.pkl")
+    st.write("Loading dataset…")
     df       = pd.read_csv("final_modeling_dataset.csv")
-
-    # Reindex to the exact 250-column shape the models expect; fill everything
-    # with 0 so no NaN reaches the pipeline's internal (legacy) imputer.
-    df_features = df.reindex(columns=FEATURES, fill_value=0).fillna(0)
-
-    # Build scaled feature matrix — data is already clean, no imputer needed
-    sc   = StandardScaler()
-    X_sc = sc.fit_transform(df_features)
-
-    return reg_pipe, clf_pipe, FEATURES, df, X_sc, sc
+    st.write("Ready.")
+    # Similarity matrix is built lazily on first query — not at startup.
+    return reg_pipe, clf_pipe, FEATURES, df
 
 
-reg_pipe, clf_pipe, FEATURES, df_data, X_sc, sc = load_everything()
-helpers.init(reg_pipe, clf_pipe, FEATURES, df_data, X_sc, None, sc)
+reg_pipe, clf_pipe, FEATURES, df_data = load_everything()
+helpers.init(reg_pipe, clf_pipe, FEATURES, df_data)
 
 
 # ── Claude helpers ────────────────────────────────────────────────────────────
