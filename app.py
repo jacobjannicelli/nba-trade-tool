@@ -22,15 +22,10 @@ api_key = st.secrets.get("ANTHROPIC_API_KEY", os.environ.get("ANTHROPIC_API_KEY"
 # ── Load models & data once at startup ───────────────────────────────────────
 @st.cache_resource(show_spinner="Loading models and data…")
 def load_everything():
-    st.write("Loading regressor…")
     reg_pipe = joblib.load("final_trade_impact_regressor.pkl")
-    st.write("Loading classifier…")
     clf_pipe = joblib.load("final_trade_impact_classifier.pkl")
-    st.write("Loading features…")
     FEATURES = joblib.load("final_model_features.pkl")
-    st.write("Loading dataset…")
     df       = pd.read_csv("final_modeling_dataset.csv")
-    st.write("Ready.")
     # Similarity matrix is built lazily on first query — not at startup.
     return reg_pipe, clf_pipe, FEATURES, df
 
