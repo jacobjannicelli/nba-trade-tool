@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Read(//c/c/Users/jajan/Desktop/Spring 2026/Applied Machine Learning/Final Group Project/nba-trade-tool/**)",
+      "Bash(pip freeze *)",
+      "WebFetch(domain:pypi.org)"
+    ]
+  }
+}
