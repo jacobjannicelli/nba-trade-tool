@@ -2,7 +2,8 @@ import re
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Module-level globals — set via init() before calling any function
@@ -23,20 +24,26 @@ def init(reg_pipe_, clf_pipe_, features_, df_):
     _X_sc    = None   # reset so a new dataset triggers a fresh build
 
 
-def _run_pipeline(pipeline, X, method="predict"):
+_passthrough = FunctionTransformer(lambda x: x)
+
+
+def _safe_predict(pipeline, X_clean, method="predict"):
     """
-    Manually step through an sklearn Pipeline, skipping any SimpleImputer steps.
-    Needed because pkl files saved on sklearn 1.6.1 contain imputers that are
-    missing internal attributes added in sklearn 1.8.0.
+    Call pipeline.predict / predict_proba after temporarily replacing any
+    SimpleImputer steps with a no-op passthrough.  This avoids the
+    _fill_dtype AttributeError when pkl files trained on sklearn 1.6.1 are
+    run under sklearn 1.8.0.  The original steps are always restored.
     """
-    Xt = X.values if hasattr(X, "values") else X
-    steps = pipeline.steps
-    for _, step in steps[:-1]:
-        if "imputer" in type(step).__name__.lower():
-            continue  # data is already clean — skip the broken legacy imputer
-        Xt = step.transform(Xt)
-    final = steps[-1][1]
-    return getattr(final, method)(Xt)
+    swapped = []
+    for i, (name, step) in enumerate(pipeline.steps):
+        if isinstance(step, SimpleImputer):
+            swapped.append((i, name, step))
+            pipeline.steps[i] = (name, _passthrough)
+    try:
+        return getattr(pipeline, method)(X_clean.values)
+    finally:
+        for i, name, step in swapped:
+            pipeline.steps[i] = (name, step)
 
 
 def _ensure_similarity_matrix():
@@ -141,8 +148,8 @@ def predict_acquisition_impact(player_name, receiving_team=None, season=None):
     row   = sub.iloc[[0]]
     X_row = row.reindex(columns=FEATURES, fill_value=0).fillna(0)
 
-    pred = float(_run_pipeline(reg_pipe, X_row, "predict")[0])
-    prob = float(_run_pipeline(clf_pipe, X_row, "predict_proba")[0, 1])
+    pred = float(_safe_predict(reg_pipe, X_row, "predict")[0])
+    prob = float(_safe_predict(clf_pipe, X_row, "predict_proba")[0, 1])
 
     base_pred = row['recv_hist_baseline_win_pct_pred'].values[0]
     trans_wp  = row['receiving_team_trans_win_pct'].values[0]
