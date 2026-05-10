@@ -6,7 +6,6 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
 import helpers
@@ -29,21 +28,19 @@ def load_everything():
     FEATURES = joblib.load("final_model_features.pkl")
     df       = pd.read_csv("final_modeling_dataset.csv")
 
-    # Reindex df to the exact 250-column shape the models expect.
-    # Columns missing from the dataset are filled with 0; the pipeline's
-    # internal imputer handles any remaining variance.
-    df_features = df.reindex(columns=FEATURES, fill_value=0)
+    # Reindex to the exact 250-column shape the models expect; fill everything
+    # with 0 so no NaN reaches the pipeline's internal (legacy) imputer.
+    df_features = df.reindex(columns=FEATURES, fill_value=0).fillna(0)
 
-    # Build scaled feature matrix once — used by similarity engine
-    imp  = SimpleImputer(strategy="median")
+    # Build scaled feature matrix — data is already clean, no imputer needed
     sc   = StandardScaler()
-    X_sc = sc.fit_transform(imp.fit_transform(df_features))
+    X_sc = sc.fit_transform(df_features)
 
-    return reg_pipe, clf_pipe, FEATURES, df, X_sc, imp, sc
+    return reg_pipe, clf_pipe, FEATURES, df, X_sc, sc
 
 
-reg_pipe, clf_pipe, FEATURES, df_data, X_sc, imp, sc = load_everything()
-helpers.init(reg_pipe, clf_pipe, FEATURES, df_data, X_sc, imp, sc)
+reg_pipe, clf_pipe, FEATURES, df_data, X_sc, sc = load_everything()
+helpers.init(reg_pipe, clf_pipe, FEATURES, df_data, X_sc, None, sc)
 
 
 # ── Claude helpers ────────────────────────────────────────────────────────────

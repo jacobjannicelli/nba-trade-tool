@@ -2,7 +2,6 @@ import re
 
 import numpy as np
 import pandas as pd
-from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -118,7 +117,8 @@ def predict_acquisition_impact(player_name, receiving_team=None, season=None):
 
     # Multiple rows (same player traded to same team more than once) → use most recent
     row   = sub.iloc[[0]]
-    X_row = row.reindex(columns=FEATURES, fill_value=0)
+    # Pre-fill all NaN with 0 so the pipeline's internal imputer receives clean data
+    X_row = row.reindex(columns=FEATURES, fill_value=0).fillna(0)
 
     pred = float(reg_pipe.predict(X_row)[0])
     prob = float(clf_pipe.predict_proba(X_row)[0, 1])
