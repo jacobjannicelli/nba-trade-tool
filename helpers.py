@@ -2,8 +2,7 @@ import re
 
 import numpy as np
 import pandas as pd
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import FunctionTransformer, StandardScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Module-level globals — set via init() before calling any function
@@ -14,6 +13,23 @@ clf_pipe = None
 _X_sc = None      # built lazily on first call to find_similar_acquisitions()
 
 
+def _patch_imputers(estimator):
+    """
+    Rename _fit_dtype → _fill_dtype on any SimpleImputer found inside a pipeline.
+    The attribute was renamed between sklearn 1.6.1 and 1.8.0; pkl files fitted on
+    1.6.1 still carry the old name and crash on transform() under 1.8.0.
+    """
+    if hasattr(estimator, "steps"):
+        for _, step in estimator.steps:
+            _patch_imputers(step)
+    if hasattr(estimator, "estimators_"):
+        for est in estimator.estimators_:
+            _patch_imputers(est)
+    if type(estimator).__name__ == "SimpleImputer":
+        if not hasattr(estimator, "_fill_dtype") and hasattr(estimator, "_fit_dtype"):
+            estimator._fill_dtype = estimator._fit_dtype
+
+
 def init(reg_pipe_, clf_pipe_, features_, df_):
     """Initialize module globals. Must be called once at app startup."""
     global df, FEATURES, reg_pipe, clf_pipe, _X_sc
@@ -22,28 +38,8 @@ def init(reg_pipe_, clf_pipe_, features_, df_):
     reg_pipe = reg_pipe_
     clf_pipe = clf_pipe_
     _X_sc    = None   # reset so a new dataset triggers a fresh build
-
-
-_passthrough = FunctionTransformer(lambda x: x)
-
-
-def _safe_predict(pipeline, X_clean, method="predict"):
-    """
-    Call pipeline.predict / predict_proba after temporarily replacing any
-    SimpleImputer steps with a no-op passthrough.  This avoids the
-    _fill_dtype AttributeError when pkl files trained on sklearn 1.6.1 are
-    run under sklearn 1.8.0.  The original steps are always restored.
-    """
-    swapped = []
-    for i, (name, step) in enumerate(pipeline.steps):
-        if isinstance(step, SimpleImputer):
-            swapped.append((i, name, step))
-            pipeline.steps[i] = (name, _passthrough)
-    try:
-        return getattr(pipeline, method)(X_clean.values)
-    finally:
-        for i, name, step in swapped:
-            pipeline.steps[i] = (name, step)
+    _patch_imputers(reg_pipe)
+    _patch_imputers(clf_pipe)
 
 
 def _ensure_similarity_matrix():
@@ -148,8 +144,8 @@ def predict_acquisition_impact(player_name, receiving_team=None, season=None):
     row   = sub.iloc[[0]]
     X_row = row.reindex(columns=FEATURES, fill_value=0).fillna(0)
 
-    pred = float(_safe_predict(reg_pipe, X_row, "predict")[0])
-    prob = float(_safe_predict(clf_pipe, X_row, "predict_proba")[0, 1])
+    pred = float(reg_pipe.predict(X_row)[0])
+    prob = float(clf_pipe.predict_proba(X_row)[0, 1])
 
     base_pred = row['recv_hist_baseline_win_pct_pred'].values[0]
     trans_wp  = row['receiving_team_trans_win_pct'].values[0]
