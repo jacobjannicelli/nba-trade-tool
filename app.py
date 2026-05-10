@@ -1,40 +1,11 @@
-import sys
-print(f"Python version: {sys.version}")
-print("Starting imports...")
-
-try:
-    import streamlit as st
-    print("streamlit OK")
-except Exception as e:
-    print(f"streamlit FAILED: {e}")
-
-try:
-    import anthropic
-    print("anthropic OK")
-except Exception as e:
-    print(f"anthropic FAILED: {e}")
-
-try:
-    import pandas as pd
-    print("pandas OK")
-except Exception as e:
-    print(f"pandas FAILED: {e}")
-
-try:
-    import joblib
-    print("joblib OK")
-except Exception as e:
-    print(f"joblib FAILED: {e}")
-
-try:
-    import sklearn
-    print(f"sklearn OK: {sklearn.__version__}")
-except Exception as e:
-    print(f"sklearn FAILED: {e}")
-
 import os
 import json
+
+import anthropic
+import joblib
 import numpy as np
+import pandas as pd
+import streamlit as st
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
